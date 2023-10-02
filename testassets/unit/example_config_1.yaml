@@ -1,0 +1,8 @@
+seed: 123456789
+clang: ${CLANG_PATH}
+opt: ${OPT_PATH}
+passes:
+  - lowerswitch
+opt-extra-args:
+  key1: val1
+  key2: val2

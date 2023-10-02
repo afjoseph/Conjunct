@@ -1,0 +1,6 @@
+seed: 123456789
+clang: ${CLANG_PATH}
+opt: ${OPT_PATH}
+# Just run a lowerswitch pass as a basic pass here
+passes:
+  - lowerswitch

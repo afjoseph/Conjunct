@@ -4,10 +4,17 @@ import (
 	"fmt"
 	"os"
 
+	stderr "errors"
+
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/util"
+	"github.com/go-playground/errors/v5"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	ErrParsingConfig = stderr.New("Failed to parse config")
 )
 
 type ConjunctConfig struct {
@@ -34,6 +41,12 @@ func ExtractConfigFromArgs(
 ) (retArgs []string, cfg *ConjunctConfig, err error) {
 	logrus.Debugln("Parsing conjunct params...")
 
+	if len(args) == 0 {
+		// TODO <02-03-2024, afjoseph> Should this print clang's usage or are
+		// we safe here to print our own usage?
+		return args, nil, nil
+	}
+
 	// Extract config path from --conjunct-config-path
 	configFilePath := argsparser.GetArgVal(args, "--conjunct-config-path")
 	if len(configFilePath) == 0 {
@@ -48,7 +61,7 @@ func ExtractConfigFromArgs(
 	// Read and parse
 	configFileContent, err := os.ReadFile(configFilePath)
 	if err != nil {
-		return args, nil, fmt.Errorf("Failed to read YAML file: %w", err)
+		return args, nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 	if len(configFileContent) == 0 {
 		return args, nil, fmt.Errorf("Empty YAML file")
@@ -56,14 +69,16 @@ func ExtractConfigFromArgs(
 	config := ConjunctConfig{}
 	err = yaml.Unmarshal(configFileContent, &config)
 	if err != nil {
-		return args, nil, fmt.Errorf(
-			"Failed to parse YAML file: %w",
+		return args, nil, errors.Wrapf(
+			ErrParsingConfig,
+			"at %s: %v",
+			configFilePath,
 			err,
 		)
 	}
 	if config.Seed == 0 {
 		return args, nil, fmt.Errorf(
-			"Missing seed in Conjunct config YAML file",
+			"missing seed in Conjunct config YAML file",
 		)
 	}
 

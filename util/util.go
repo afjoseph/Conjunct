@@ -15,7 +15,11 @@ import (
 func ExpandPath(path string, expandSymlinks bool) (string, error) {
 	path, err := ResolveShellVariables(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve shell variables in %s: %w", path, err)
+		return "", fmt.Errorf(
+			"failed to resolve shell variables in %s: %w",
+			path,
+			err,
+		)
 	}
 	cmdArgs := []string{}
 	if !expandSymlinks {
@@ -34,7 +38,11 @@ func ResolveShellVariables(path string) (string, error) {
 	cmd := exec.Command("bash", "-c", fmt.Sprintf("echo %s", path))
 	b, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve shell variables in %s: %w", path, err)
+		return "", fmt.Errorf(
+			"failed to resolve shell variables in %s: %w",
+			path,
+			err,
+		)
 	}
 	return strings.TrimSpace(string(b)), nil
 }
@@ -83,4 +91,39 @@ func CheckIfOptBinary(path string) error {
 		return fmt.Errorf("not an opt binary: %s", path)
 	}
 	return nil
+}
+
+type SourceFileType int
+
+const (
+	SourceFileType_C       SourceFileType = 1
+	SourceFileType_CPP     SourceFileType = 2
+	SourceFileType_OBJC    SourceFileType = 3
+	SourceFileType_Unknown SourceFileType = -1
+)
+
+var (
+	cppFileExtensions  = []string{".cpp", ".cc", ".cxx", ".c++"}
+	objcFileExtensions = []string{".m"}
+	cFileExtensions    = []string{".c"}
+)
+
+func FetchSourceFileType(path string) (SourceFileType, error) {
+	ext := filepath.Ext(path)
+	for _, e := range cppFileExtensions {
+		if e == ext {
+			return SourceFileType_CPP, nil
+		}
+	}
+	for _, e := range objcFileExtensions {
+		if e == ext {
+			return SourceFileType_OBJC, nil
+		}
+	}
+	for _, e := range cFileExtensions {
+		if e == ext {
+			return SourceFileType_C, nil
+		}
+	}
+	return SourceFileType_Unknown, fmt.Errorf("unknown file extension: %s", ext)
 }

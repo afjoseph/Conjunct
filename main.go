@@ -9,6 +9,7 @@ import (
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/config"
 	"github.com/afjoseph/conjunct/core"
+	"github.com/afjoseph/conjunct/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -55,12 +56,6 @@ func main() {
 		fmt.Printf("Conjunct version %s\n", Version)
 		os.Exit(0)
 	}
-	if len(args) == 0 {
-		// TODO <02-03-2024, afjoseph> Should this print clang's usage or are
-		// we safe here to print our own usage?
-		fmt.Println("Usage: conjunct [flags] -- [clang args]")
-		os.Exit(1)
-	}
 	// Check for verbose flags
 	if argsparser.HasArg(args, "--conjunct-verbose") {
 		logrus.SetLevel(logrus.DebugLevel)
@@ -80,10 +75,31 @@ func main() {
 	// If there's no config provided, just run whatever Clang we can find in
 	// $PATH
 	if cfg == nil {
-		clangPath, err := exec.LookPath("clang")
+		// Extract source file extension: we need to know if this is a C or C++
+		// file mainly to know which clang binary to run since there is a
+		// difference between clang++ and clang:
+		// https://github.com/llvm/llvm-project/issues/54701#issuecomment-1086055306
+		sourceFileName, sourceFileType, err := argsparser.GetSourceFileName(
+			args,
+		)
+		if err != nil {
+			panic(fmt.Errorf("while getting source file name: %w", err))
+		}
+		clangBinaryName := ""
+		if sourceFileType == util.SourceFileType_C {
+			clangBinaryName = "clang"
+		} else if sourceFileType == util.SourceFileType_CPP ||
+			sourceFileType == util.SourceFileType_OBJC {
+			clangBinaryName = "clang++"
+		} else {
+			panic(fmt.Errorf("unknown file type: %s", sourceFileName))
+		}
+		// Get Clang's path from $PATH
+		clangPath, err := exec.LookPath(clangBinaryName)
 		if err != nil {
 			panic(fmt.Errorf("failed to find clang in $PATH: %w", err))
 		}
+		// Run it and exit
 		err, exitCode := core.RunOriginalClang(clangPath, args)
 		if err != nil {
 			logrus.Errorf("failed to run original clang: %v", err)

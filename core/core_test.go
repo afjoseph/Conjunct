@@ -103,7 +103,7 @@ func TestRunConjunct(t *testing.T) {
 
 	// Specify output path for object file
 	compiledObjectOutPath := filepath.Join("/tmp/", "test_hello")
-	err = RunConjunctWithConfig(
+	err = RunConjunct(
 		config,
 		[]string{
 			"-o", compiledObjectOutPath,

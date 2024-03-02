@@ -239,15 +239,13 @@ func RunConjunct(
 	// XXX <29-09-2023, afjoseph> This is not perfectly accurate since there's
 	// no obligation by the compiler to postfix -c with the objectName, but it's
 	// what usually happens
-	objectName := argsparser.GetArgVal(args, "-c")
-	if len(objectName) == 0 {
-		return fmt.Errorf("missing -c argument")
+	sourceFileName, _, err := argsparser.GetSourceFileName(args)
+	if err != nil {
+		return fmt.Errorf("while getting source file name: %w", err)
 	}
-	// get the basename
-	objectName = filepath.Base(objectName)
 
 	bitcodeFilepath, err := emitBitcode(
-		objectName,
+		sourceFileName,
 		cfg.ClangPath,
 		args,
 		tempDir,
@@ -257,7 +255,7 @@ func RunConjunct(
 		return fmt.Errorf("while emitting bitcode: %w", err)
 	}
 	afterOptBitcodeFilepath, err := schedulePasses(
-		objectName,
+		sourceFileName,
 		cfg,
 		bitcodeFilepath,
 		tempDir,
@@ -286,7 +284,7 @@ func RunConjunct(
 			)
 		}
 	}
-	logrus.Infof("Conjunct ran successfully on %s\n", objectName)
+	logrus.Infof("Conjunct ran successfully on %s\n", sourceFileName)
 	return nil
 }
 

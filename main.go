@@ -79,20 +79,23 @@ func main() {
 		// file mainly to know which clang binary to run since there is a
 		// difference between clang++ and clang:
 		// https://github.com/llvm/llvm-project/issues/54701#issuecomment-1086055306
-		sourceFileName, sourceFileType, err := argsparser.GetSourceFileName(
+		clangBinaryName := ""
+		_, sourceFileType, err := argsparser.GetSourceFileName(
 			args,
 		)
 		if err != nil {
-			panic(fmt.Errorf("while getting source file name: %w", err))
-		}
-		clangBinaryName := ""
-		if sourceFileType == util.SourceFileType_C {
-			clangBinaryName = "clang"
-		} else if sourceFileType == util.SourceFileType_CPP ||
-			sourceFileType == util.SourceFileType_OBJC {
+			// If we failed to get the source filename, just use clang++
 			clangBinaryName = "clang++"
 		} else {
-			panic(fmt.Errorf("unknown file type: %s", sourceFileName))
+			if sourceFileType == util.SourceFileType_C {
+				clangBinaryName = "clang"
+			} else if sourceFileType == util.SourceFileType_CPP ||
+				sourceFileType == util.SourceFileType_OBJC {
+				clangBinaryName = "clang++"
+			} else {
+				// This shouldn't happen, but it's okay to use clang++ here too
+				clangBinaryName = "clang++"
+			}
 		}
 		// Get Clang's path from $PATH
 		clangPath, err := exec.LookPath(clangBinaryName)

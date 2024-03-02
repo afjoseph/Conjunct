@@ -50,11 +50,14 @@ func emitBitcode(
 	args = argsparser.AddArg(args, "-emit-llvm", "")
 	// args = argsparser.AddArg(args, "-c", "")
 	args = argsparser.AddArg(args, "-o", bitcodeFilepath)
-	// args = argsparser.AddArg(
-	// 	args,
-	// 	"-Wno-error=unused-command-line-argument",
-	// 	"",
-	// )
+	// XXX <02-03-2024, afjoseph> When running Conjunct with different build
+	// flags, it's wise to tell the compiler to ignore those flags, else some
+	// builds will fail
+	args = argsparser.AddArg(
+		args,
+		"-Wno-unused-command-line-argument",
+		"",
+	)
 
 	logrus.Infof("Emitting bitcode for %s\n", objectName)
 	cmd := exec.Command(clangPath, args...)
@@ -150,11 +153,14 @@ func buildBitcode(
 	args = argsparser.AddArg(args, "-x", "ir")
 	args = argsparser.RemoveArg(args, "-c", true)
 	args = argsparser.AddArg(args, "-c", bitcodeFilepath)
-	// args = argsparser.AddArg(
-	// 	args,
-	// 	"-Wno-error=unused-command-line-argument",
-	// 	"",
-	// )
+	// XXX <02-03-2024, afjoseph> When running Conjunct with different build
+	// flags, it's wise to tell the compiler to ignore those flags, else some
+	// builds will fail
+	args = argsparser.AddArg(
+		args,
+		"-Wno-unused-command-line-argument",
+		"",
+	)
 	outFilepath := argsparser.GetArgVal(args, "-o")
 	if len(outFilepath) == 0 {
 		return "", fmt.Errorf("missing -o argument")

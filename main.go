@@ -59,6 +59,7 @@ func main() {
 	// Check for verbose flags
 	if argsparser.HasArg(args, "--conjunct-verbose") {
 		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Debugf("Running conjunct in verbose mode")
 	}
 	args = argsparser.RemoveArg(args, "--conjunct-verbose", false)
 

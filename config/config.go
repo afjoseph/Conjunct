@@ -22,9 +22,6 @@ type ConjunctConfig struct {
 	Passes []string `yaml:"passes"`
 	// OptExtraArgs is a map of extra arguments to pass to Opt
 	OptExtraArgs map[string]string `yaml:"opt-extra-args"`
-	// If DryRun is true, run Conjunct's pipeline but don't actually run
-	// any commands. See README's FAQ for more info.
-	DryRun bool `yaml:"-"`
 	// If RetainTempDir is true, don't delete the temporary directory
 	// conjunct creates. Useful for debugging.
 	RetainTempDir bool `yaml:"-"`
@@ -34,35 +31,38 @@ type ConjunctConfig struct {
 // it as a ConjunctConfig struct
 func ExtractConfigFromArgs(
 	args []string,
-) (retArgs []string, cfg *ConjunctConfig, shouldRunConjunct bool, err error) {
+) (retArgs []string, cfg *ConjunctConfig, err error) {
 	logrus.Debugln("Parsing conjunct params...")
 
 	// Extract config path from --conjunct-config-path
 	configFilePath := argsparser.GetArgVal(args, "--conjunct-config-path")
 	if len(configFilePath) == 0 {
 		logrus.Debugln("Failed to find --conjunct-config-path")
-		return args, nil, false, nil
+		// Return without errors since we didn't fail: we just don't have a
+		// conjunct config file which is allowed. It just means run the
+		// original clang in $PATH
+		return args, nil, nil
 	}
 	args = argsparser.RemoveArg(args, "--conjunct-config-path", true)
 
 	// Read and parse
 	configFileContent, err := os.ReadFile(configFilePath)
 	if err != nil {
-		return args, nil, false, fmt.Errorf("Failed to read YAML file: %w", err)
+		return args, nil, fmt.Errorf("Failed to read YAML file: %w", err)
 	}
 	if len(configFileContent) == 0 {
-		return args, nil, false, fmt.Errorf("Empty YAML file")
+		return args, nil, fmt.Errorf("Empty YAML file")
 	}
 	config := ConjunctConfig{}
 	err = yaml.Unmarshal(configFileContent, &config)
 	if err != nil {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Failed to parse YAML file: %w",
 			err,
 		)
 	}
 	if config.Seed == 0 {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Missing seed in Conjunct config YAML file",
 		)
 	}
@@ -76,14 +76,14 @@ func ExtractConfigFromArgs(
 	// `clang`, which will cause libstd++ linking errors.
 	config.ClangPath, err = util.ExpandPath(config.ClangPath, false)
 	if err != nil {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Failed to expand clang path %s: %w",
 			config.ClangPath,
 			err,
 		)
 	}
 	if err := util.CheckIfClangBinary(config.ClangPath); err != nil {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Failed to find Clang at %s: %w",
 			config.ClangPath,
 			err,
@@ -94,14 +94,14 @@ func ExtractConfigFromArgs(
 	// unit tests where symlinks are not expanded
 	config.OptPath, err = util.ExpandPath(config.OptPath, false)
 	if err != nil {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Failed to expand opt path %s: %w",
 			config.OptPath,
 			err,
 		)
 	}
 	if err := util.CheckIfOptBinary(config.OptPath); err != nil {
-		return args, nil, false, fmt.Errorf(
+		return args, nil, fmt.Errorf(
 			"Failed to find Opt at %s: %w",
 			config.OptPath,
 			err,
@@ -117,11 +117,5 @@ func ExtractConfigFromArgs(
 	}
 
 	logrus.Debugf("Parsed Conjunct config file successfully: %+v\n", config)
-
-	// Run only during object compilation steps
-	if !argsparser.HasArg(args, "-c") {
-		logrus.Debugln("Not an object compilation step: using Clang instead")
-		return args, &config, false, nil
-	}
-	return args, &config, true, nil
+	return args, &config, nil
 }

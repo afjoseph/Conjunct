@@ -183,7 +183,7 @@ func buildBitcode(
 	return outFilepath, nil
 }
 
-// RunConjunctWithConfig runs the Conjunct core using 'cfg', which looks
+// RunConjunct runs the Conjunct core using 'cfg', which looks
 // like this:
 // - Emit bitcode using emitBitcode()
 // - Run the passes using opt, sequentially, on every emitted bitcode using
@@ -199,12 +199,33 @@ func buildBitcode(
 // It then exits with err if command failed
 //
 //	else, it'll exit normally
-func RunConjunctWithConfig(
+func RunConjunct(
 	cfg *config.ConjunctConfig,
 	args []string,
 ) error {
-	logrus.Debugf("runcore(): config: %+v, args: %+v", cfg, args)
+	logrus.Debugf("Config: %+v, args: %+v", cfg, args)
 
+	// Check for dry runs
+	dryRun := false
+	// If dryRun is true, run Conjunct's pipeline but don't actually run
+	// any commands. See README's FAQ for more info.
+	if argsparser.HasArg(args, "--conjunct-dry-run") {
+		dryRun = true
+	}
+	args = argsparser.RemoveArg(args, "--conjunct-dry-run", false)
+
+	// Conjunct must run only during object compilation steps.
+	// In any other instance, just run original clang
+	if !argsparser.HasArg(args, "-c") {
+		logrus.Debugln("Not an object compilation step: using Clang instead")
+		err, exitCode := RunOriginalClang(cfg.ClangPath, args)
+		if err != nil {
+			os.Exit(exitCode)
+		}
+		return nil
+	}
+
+	// Create temp dir
 	tempDir, err := os.MkdirTemp("", "conjunct")
 	if err != nil {
 		return fmt.Errorf("while creating temp dir: %w", err)
@@ -230,7 +251,7 @@ func RunConjunctWithConfig(
 		cfg.ClangPath,
 		args,
 		tempDir,
-		cfg.DryRun,
+		dryRun,
 	)
 	if err != nil {
 		return fmt.Errorf("while emitting bitcode: %w", err)
@@ -240,7 +261,7 @@ func RunConjunctWithConfig(
 		cfg,
 		bitcodeFilepath,
 		tempDir,
-		cfg.DryRun,
+		dryRun,
 	)
 	if err != nil {
 		return fmt.Errorf("while scheduling passes: %w", err)
@@ -249,12 +270,12 @@ func RunConjunctWithConfig(
 		cfg.ClangPath,
 		afterOptBitcodeFilepath,
 		args,
-		cfg.DryRun,
+		dryRun,
 	)
 	if err != nil {
 		return fmt.Errorf("while building bitcode: %w", err)
 	}
-	if cfg.DryRun {
+	if dryRun {
 		// run original clang
 		logrus.Debugln("Running original clang during dry-run...")
 		err, _ := RunOriginalClang(cfg.ClangPath, args)
@@ -270,7 +291,10 @@ func RunConjunctWithConfig(
 }
 
 // RunOriginalClang runs the original clang using 'args'
-func RunOriginalClang(clangPath string, args []string) (error, int) {
+func RunOriginalClang(
+	clangPath string,
+	args []string,
+) (err error, exitCode int) {
 	logrus.Debugln("Running original clang...")
 	if len(clangPath) == 0 {
 		panic("clangPath is nil. Add it in the YAML configuration file")

@@ -55,32 +55,44 @@ func main() {
 		fmt.Printf("Conjunct version %s\n", Version)
 		os.Exit(0)
 	}
+	if len(args) == 0 {
+		// TODO <02-03-2024, afjoseph> Should this print clang's usage or are
+		// we safe here to print our own usage?
+		fmt.Println("Usage: conjunct [flags] -- [clang args]")
+		os.Exit(1)
+	}
 	// Check for verbose flags
 	if argsparser.HasArg(args, "--conjunct-verbose") {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 	args = argsparser.RemoveArg(args, "--conjunct-verbose", false)
 
-	args, cfg, shouldRunConjunct, err := config.ExtractConfigFromArgs(args)
+	// Paths:
+	// - Config is provided
+	//   - Do things however the config wants it
+	// - Config not provided
+	//   - Find clang in $PATH
+	//   - Run clang
+	args, cfg, err := config.ExtractConfigFromArgs(args)
 	if err != nil {
 		panic(fmt.Errorf("failed to extract conjunct config: %w", err))
 	}
-	// if shouldRunConjunct is false, we don't need to run conjunct; just run
-	// Clang regluarly
-	if !shouldRunConjunct {
-		err, exitCode := core.RunOriginalClang(cfg.ClangPath, args)
+	// If there's no config provided, just run whatever Clang we can find in
+	// $PATH
+	if cfg == nil {
+		clangPath, err := exec.LookPath("clang")
 		if err != nil {
+			panic(fmt.Errorf("failed to find clang in $PATH: %w", err))
+		}
+		err, exitCode := core.RunOriginalClang(clangPath, args)
+		if err != nil {
+			logrus.Errorf("failed to run original clang: %v", err)
 			os.Exit(exitCode)
 		}
 		os.Exit(0)
 	}
-	// Check for dry run
-	if argsparser.HasArg(args, "--conjunct-dry-run") {
-		cfg.DryRun = true
-	}
-	args = argsparser.RemoveArg(args, "--conjunct-dry-run", false)
 
-	if err := core.RunConjunctWithConfig(cfg, args); err != nil {
+	if err := core.RunConjunct(cfg, args); err != nil {
 		panic(fmt.Errorf("failed to run conjunct: %w", err))
 	}
 }

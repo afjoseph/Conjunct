@@ -98,7 +98,6 @@ func TestRunConjunct(t *testing.T) {
 		Seed:      123,
 		ClangPath: clangPath,
 		OptPath:   optPath,
-		Passes:    []string{},
 	}
 
 	// Specify output path for object file

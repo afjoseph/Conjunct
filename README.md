@@ -56,7 +56,7 @@ Conjunct by default accepts all the parameters you'd regularly pass to Clang. Co
 
 To run any intermediate steps, you need a config file that specifies what needs to run. This is supplied to Conjunct through the `--conjunct-config-path=<CONFIG_FILE_PATH>` parameter.
 
-The config file should be a YAML file. The specs are in `./config/config.go:ConjunctConfig`. There's an example file in the demos here: `./testassets/ios/ConjunctDemo/conjunct-config-path.yaml` and `./testassets/android/ConjunctDemo/conjunct-config-path.yaml`
+The config file should be a YAML file. The specs are in `./config/config.go:ConjunctConfig`. There's an example file in the demos here: `./testassets/ios/ConjunctDemo/conjunct-config.yaml` and `./testassets/android/ConjunctDemo/conjunct-config.yaml`
 
 # Testing
 
@@ -66,15 +66,15 @@ There's also tests for both Android and iOS projects, run each with:
 
         // Android
         mage -v BuildAndroidDemoWithConjunct \
-        ${OPT_PATH} \
-        ${CLANG_PATH} \
-        true
+            ${OPT_PATH} \
+            ${CLANG_PATH} \
+            true
 
         // iOS
         mage -v BuildIosDemoWithConjunct \
-        ${OPT_PATH} \
-        ${CLANG_PATH} \
-        true
+            ${OPT_PATH} \
+            ${CLANG_PATH} \
+            true
 
 Where:
 - `${CLANG_PATH}` is pointing to `clang` binary

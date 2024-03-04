@@ -15,12 +15,12 @@ import (
 
 var iosDemoConjunctConfigPath = filepath.Join(
 	projectpath.Root,
-	"testassets/ios/ConjunctDemo/conjunct-config-path.yaml",
+	"testassets/ios/ConjunctDemo/conjunct-config.yaml",
 )
 
 var androidDemoConjunctConfigPath = filepath.Join(
 	projectpath.Root,
-	"testassets/android/ConjunctDemo/conjunct-config-path.yaml",
+	"testassets/android/ConjunctDemo/conjunct-config.yaml",
 )
 
 func RunUnitTests() error {

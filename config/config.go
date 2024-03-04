@@ -1,10 +1,9 @@
 package config
 
 import (
+	stderr "errors"
 	"fmt"
 	"os"
-
-	stderr "errors"
 
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/util"
@@ -22,13 +21,13 @@ type ConjunctConfig struct {
 	// passes
 	Seed int64 `yaml:"seed"`
 	// ClangPath is the path to the Clang binary
-	ClangPath string `yaml:"clang"`
+	ClangPath string `yaml:"clang-path"`
 	// OptPath is the path to the Opt binary
-	OptPath string `yaml:"opt"`
-	// Passes is a list of passes to run
-	Passes []string `yaml:"passes"`
-	// OptExtraArgs is a map of extra arguments to pass to Opt
-	OptExtraArgs map[string]string `yaml:"opt-extra-args"`
+	OptPath string `yaml:"opt-path"`
+	// OptEnvArgs is a list of environment variables to setup while running Opt
+	OptEnvVars map[string]string `yaml:"opt-env-vars"`
+	// OptCLIArgs is a list of arguments to pass to Opt
+	OptCLIArgs []string `yaml:"opt-cli-args"`
 	// If RetainTempDir is true, don't delete the temporary directory
 	// conjunct creates. Useful for debugging.
 	RetainTempDir bool `yaml:"-"`

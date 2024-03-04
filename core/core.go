@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/config"
@@ -42,8 +41,9 @@ func emitBitcode(
 	args = argsparser.RemoveArg(args, "-fembed-bitcode", false)
 	args = argsparser.RemoveArg(args, "-fembed-bitcode-marker", false)
 	args = argsparser.RemoveArg(args, "-o", true)
-	// XXX Now, we don't want our passes to play with sanitizer code, so it is
-	// best to remove it at this step.
+	// XXX We don't want our passes to play with address sanitizer (ASAN) code,
+	// so it is best to remove it at this step.
+	//
 	// In buildBitcode, the sanitization flags will be KEPT so that the passes
 	// are **tested** against sanitizers (but not **scheduled** with it).
 	args = argsparser.RemoveRegexArg(args, "-fsanitize=[a-z,]+")
@@ -81,7 +81,9 @@ func emitBitcode(
 // schedulePasses runs opt on 'inputFilepath' using information from 'cfg'.
 func schedulePasses(
 	objectName string,
-	cfg *config.ConjunctConfig,
+	optPath string,
+	optCLIArgs []string,
+	optEnvVars map[string]string,
 	inputFilepath string,
 	tempDir string,
 	isDryRun bool,
@@ -101,25 +103,25 @@ func schedulePasses(
 		return "", fmt.Errorf("while expanding path: %w", err)
 	}
 
-	cmdArgs := []string{
-		fmt.Sprintf("-passes=%s", strings.Join(cfg.Passes, ",")),
-		inputFilepath,
-		"-o",
-		outputFilepath,
+	cliArgs := []string{}
+	for _, arg := range optCLIArgs {
+		cliArgs = append(cliArgs, arg)
 	}
-	if cfg.OptExtraArgs != nil {
-		for k, v := range cfg.OptExtraArgs {
-			cmdArgs = append(cmdArgs, k+"="+v)
-		}
-	}
+	cliArgs = append(cliArgs, inputFilepath)
+	cliArgs = append(cliArgs, "-o", outputFilepath)
 
-	cmd := exec.Command(cfg.OptPath, cmdArgs...)
+	cmd := exec.Command(optPath, cliArgs...)
+	cmd.Env = os.Environ()
+	for k, v := range optEnvVars {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 	logrus.Debugf(
-		"Running opt on %s @ %s -> %s using this command: %s\n",
+		"Running opt on %s @ %s -> %s using this command: %s and these env vars: %+v\n",
 		objectName,
 		inputFilepath,
 		outputFilepath,
 		cmd.String(),
+		optEnvVars,
 	)
 	if isDryRun {
 		logrus.Debugln("Dry-run: not running above command")
@@ -262,7 +264,9 @@ func RunConjunct(
 	}
 	afterOptBitcodeFilepath, err := schedulePasses(
 		sourceFileName,
-		cfg,
+		cfg.OptPath,
+		cfg.OptCLIArgs,
+		cfg.OptEnvVars,
 		bitcodeFilepath,
 		tempDir,
 		dryRun,

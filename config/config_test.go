@@ -42,14 +42,10 @@ func TestExtractConfig(t *testing.T) {
 				"-c",
 				"whatever.c"},
 			expectedConfig: &ConjunctConfig{
-				Seed:      123456789,
-				ClangPath: clangPath,
-				OptPath:   optPath,
-				Passes:    []string{"lowerswitch"},
-				OptExtraArgs: map[string]string{
-					"key1": "val1",
-					"key2": "val2",
-				},
+				Seed:       123456789,
+				ClangPath:  clangPath,
+				OptPath:    optPath,
+				OptCLIArgs: []string{"--lowerswitch"},
 			},
 		},
 		{
@@ -61,14 +57,10 @@ func TestExtractConfig(t *testing.T) {
 					"testassets/unit",
 					"example_config_1.yaml")},
 			expectedConfig: &ConjunctConfig{
-				Seed:      123456789,
-				ClangPath: clangPath,
-				OptPath:   optPath,
-				Passes:    []string{"lowerswitch"},
-				OptExtraArgs: map[string]string{
-					"key1": "val1",
-					"key2": "val2",
-				},
+				Seed:       123456789,
+				ClangPath:  clangPath,
+				OptPath:    optPath,
+				OptCLIArgs: []string{"--lowerswitch"},
 			},
 		},
 		{

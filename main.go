@@ -13,16 +13,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var Version string
+var (
+	// This is the version of conjunct. It's set through the build process.
+	Version string = "UNKNOWN"
+	// DefaultClangPath is the default path to the clang binary.
+	// It's used if no config is available (i.e., through
+	// "--conjunct-config-path") that would point to a specific clang.
+	//
+	// This variable is usually set through the build process.
+	DefaultClangPath string = ""
+)
 
 func init() {
-	// Set version from VERSION file
-	Version = "UNKNOWN"
-	t, err := os.ReadFile("VERSION")
-	if err == nil {
-		Version = string(t)
-	}
-
 	// Set logrus output to stdout and log file
 	logFilePath := os.Getenv("CONJUNCT_LOG_FILE")
 	if len(logFilePath) > 0 {
@@ -53,7 +55,11 @@ func main() {
 	args := os.Args[1:]
 	// Check for version flag
 	if argsparser.HasArg(args, "--version") {
-		fmt.Printf("Conjunct version %s\n", Version)
+		fmt.Printf(
+			"Conjunct version %s | Default clang path: %s\n",
+			Version,
+			DefaultClangPath,
+		)
 		os.Exit(0)
 	}
 	// Check for verbose flags
@@ -98,10 +104,16 @@ func main() {
 				clangBinaryName = "clang++"
 			}
 		}
-		// Get Clang's path from $PATH
-		clangPath, err := exec.LookPath(clangBinaryName)
-		if err != nil {
-			panic(fmt.Errorf("failed to find clang in $PATH: %w", err))
+		// Get Clang's path from DefaultClangPath or $PATH, preferring the
+		// former
+		clangPath := ""
+		if DefaultClangPath != "" {
+			clangPath = DefaultClangPath
+		} else {
+			clangPath, err = exec.LookPath(clangBinaryName)
+			if err != nil {
+				panic(fmt.Errorf("failed to find clang in $PATH: %w", err))
+			}
 		}
 		// Run it and exit
 		err, exitCode := core.RunOriginalClang(clangPath, args)

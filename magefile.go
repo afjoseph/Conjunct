@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/afjoseph/conjunct/projectpath"
 	"github.com/afjoseph/conjunct/util"
@@ -27,8 +28,13 @@ func RunUnitTests() error {
 	return sh.Run("go", "test", "-race", "-v", "./...")
 }
 
-func BuildConjunct() error {
-	_, err := buildConjunct()
+func Build() error {
+	_, err := buildConjunct("")
+	return err
+}
+
+func BuildWithDefaultClang(clangPath string) error {
+	_, err := buildConjunct(clangPath)
 	return err
 }
 
@@ -43,7 +49,7 @@ func BuildIosDemoWithConjunct(
 	verbose bool,
 ) error {
 	// Set conjunct path
-	conjunctBinPath, err := buildConjunct()
+	conjunctBinPath, err := buildConjunct("")
 	orDie(err, "failed to build conjunct")
 
 	// Get absolute config path
@@ -89,7 +95,7 @@ func BuildAndroidDemoWithConjunct(
 	verbose bool,
 ) error {
 	// Set conjunct path
-	conjunctBinPath, err := buildConjunct()
+	conjunctBinPath, err := buildConjunct("")
 	orDie(err, "failed to build conjunct")
 
 	// Get absolute config path
@@ -189,8 +195,23 @@ func buildIosDemoWithEnv(env map[string]string, verbose bool) error {
 }
 
 // buildConjunct builds conjunct and returns the path of the binary
-func buildConjunct() (binPath string, err error) {
-	err = sh.Run("go", "build", "-o", "conjunct", ".")
+func buildConjunct(defaultClangPath string) (binPath string, err error) {
+	args := []string{"build"}
+	// If defaultClangPath is provided, add it to the build flags
+	ldFlags := ""
+	if defaultClangPath != "" {
+		ldFlags = fmt.Sprintf("--ldflags=-X main.DefaultClangPath=%s", defaultClangPath)
+	}
+
+	// Add version information
+	commit, err := sh.Output("git", "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("failed to read VERSION file: %w", err)
+	}
+	ldFlags += fmt.Sprintf(" -X main.Version=%s", strings.TrimSpace(string(commit)))
+	args = append(args, ldFlags)
+	args = append(args, "-o", "conjunct", ".")
+	err = sh.Run("go", args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to build conjunct: %w", err)
 	}

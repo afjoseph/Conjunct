@@ -67,15 +67,15 @@ There's also tests for both Android and iOS projects, run each with:
         // Android
         mage -v BuildAndroidDemoWithConjunct \
             ${OPT_PATH} \
-            ${CLANG_PATH} \
+            ${CLANG_DIR_PATH} \
             true
 
         // iOS
         mage -v BuildIosDemoWithConjunct \
             ${OPT_PATH} \
-            ${CLANG_PATH} \
+            ${CLANG_DIR_PATH} \
             true
 
 Where:
-- `${CLANG_PATH}` is pointing to `clang` binary
+- `${CLANG_DIR_PATH}` is pointing to directory containing both `clang` and `clang++` binaries
 - `${OPT_PATH}` is pointing to an `opt` binary

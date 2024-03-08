@@ -1,5 +1,5 @@
 seed: 123456789
-clang-path: ${CLANG_PATH}
+clang-dir-path: ${CLANG_DIR_PATH}
 opt-path: ${OPT_PATH}
 # Just run a lowerswitch pass as a basic pass here
 opt-cli-args:

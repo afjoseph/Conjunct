@@ -8,7 +8,9 @@ import (
 
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/config"
+	"github.com/afjoseph/conjunct/sourcefile"
 	"github.com/afjoseph/conjunct/util"
+	"github.com/go-playground/errors/v5"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,11 +27,11 @@ func emitBitcode(
 
 	bitcodeFile, err := os.Create(filepath.Join(tempDir, objectName+".bc"))
 	if err != nil {
-		return "", fmt.Errorf("while creating temp file: %w", err)
+		return "", errors.Wrapf(err, "while creating temp file")
 	}
 	bitcodeFilepath, err = util.ExpandPath(bitcodeFile.Name(), true)
 	if err != nil {
-		return "", fmt.Errorf("while expanding path: %w", err)
+		return "", errors.Wrapf(err, "while expanding path")
 	}
 
 	args := append([]string(nil), originalArgs...) // Copies the slice
@@ -59,21 +61,17 @@ func emitBitcode(
 		"",
 	)
 
-	logrus.Infof("Emitting bitcode for %s\n", objectName)
+	logrus.Infof("Emitting bitcode for %s", objectName)
 	cmd := exec.Command(clangPath, args...)
-	logrus.Debugf("cmd: %s\n", cmd.String())
+	logrus.Debugf("cmd: %s", cmd.String())
 	if isDryRun {
 		logrus.Debugln("Dry-run: not running above command")
 	} else {
 		ret, err := cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf(
-				"while emitting bitcode: %s: %w",
-				string(ret),
-				err,
-			)
+			return "", errors.Wrapf(err, "while emitting bitcode: %s", string(ret))
 		}
-		logrus.Infof("Bitcode generated in %s\n", bitcodeFilepath)
+		logrus.Infof("Bitcode generated in %s", bitcodeFilepath)
 	}
 	return bitcodeFilepath, nil
 }
@@ -88,7 +86,7 @@ func schedulePasses(
 	tempDir string,
 	isDryRun bool,
 ) (outputFilepath string, err error) {
-	logrus.Debugf("SchedulePasses() on %s at %s\n", objectName, inputFilepath)
+	logrus.Debugf("SchedulePasses() on %s at %s", objectName, inputFilepath)
 
 	// Create temporary file to be the output of the opt command
 	baseName := util.GetBasenameWithoutExtension(inputFilepath)
@@ -96,11 +94,11 @@ func schedulePasses(
 		filepath.Join(tempDir, fmt.Sprintf("%s.opt.bc", baseName)),
 	)
 	if err != nil {
-		return "", fmt.Errorf("while creating temp file: %w", err)
+		return "", errors.Wrapf(err, "while creating temp file")
 	}
 	outputFilepath, err = util.ExpandPath(outputFile.Name(), true)
 	if err != nil {
-		return "", fmt.Errorf("while expanding path: %w", err)
+		return "", errors.Wrapf(err, "while expanding path")
 	}
 
 	cliArgs := []string{}
@@ -116,7 +114,7 @@ func schedulePasses(
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	logrus.Debugf(
-		"Running opt on %s @ %s -> %s using this command: %s and these env vars: %+v\n",
+		"Running opt on %s @ %s -> %s using this command: %s and these env vars: %+v",
 		objectName,
 		inputFilepath,
 		outputFilepath,
@@ -128,9 +126,9 @@ func schedulePasses(
 	} else {
 		b, err := cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf("while running opt: %w: %s", err, string(b))
+			return "", errors.Wrapf(err, "while running opt: %s", string(b))
 		}
-		logrus.Infoln("Opt ran successfully")
+		logrus.Infof("Opt ran successfully: %s", string(b))
 	}
 	return outputFilepath, nil
 }
@@ -165,12 +163,12 @@ func buildBitcode(
 	)
 	outFilepath := argsparser.GetArgVal(args, "-o")
 	if len(outFilepath) == 0 {
-		return "", fmt.Errorf("missing -o argument")
+		return "", errors.New("missing -o argument")
 	}
 
 	cmd := exec.Command(clangPath, args...)
 	logrus.Debugf(
-		"Building bitcode %s to an object file with the following args %+v\n",
+		"Building bitcode %s to an object file with the following args %+v",
 		bitcodeFilepath,
 		cmd.String(),
 	)
@@ -179,13 +177,9 @@ func buildBitcode(
 	} else {
 		ret, err := cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf(
-				"while building bitcode: %s: %w",
-				string(ret),
-				err,
-			)
+			return "", errors.Wrapf(err, "while building bitcode: %s: %w", string(ret), err)
 		}
-		logrus.Infof("Successfully built bitcode for %s at %s\n", bitcodeFilepath, outFilepath)
+		logrus.Infof("Successfully built bitcode for %s at %s", bitcodeFilepath, outFilepath)
 	}
 
 	return outFilepath, nil
@@ -208,7 +202,8 @@ func buildBitcode(
 //
 //	else, it'll exit normally
 func RunConjunct(
-	cfg *config.ConjunctConfig,
+	cfg *config.Config,
+	clangPath string,
 	args []string,
 ) error {
 	logrus.Debugf("Config: %+v, args: %+v", cfg, args)
@@ -226,7 +221,7 @@ func RunConjunct(
 	// In any other instance, just run original clang
 	if !argsparser.HasArg(args, "-c") {
 		logrus.Debugln("Not an object compilation step: using Clang instead")
-		err, exitCode := RunOriginalClang(cfg.ClangPath, args)
+		err, exitCode := RunClang(clangPath, args)
 		if err != nil {
 			os.Exit(exitCode)
 		}
@@ -236,9 +231,9 @@ func RunConjunct(
 	// Create temp dir
 	tempDir, err := os.MkdirTemp("", "conjunct")
 	if err != nil {
-		return fmt.Errorf("while creating temp dir: %w", err)
+		return errors.Wrapf(err, "while creating temp dir")
 	}
-	logrus.Debugf("Created temp dir %s\n", tempDir)
+	logrus.Debugf("Created temp dir %s", tempDir)
 
 	if !cfg.RetainTempDir {
 		defer os.RemoveAll(tempDir)
@@ -247,20 +242,20 @@ func RunConjunct(
 	// XXX <29-09-2023, afjoseph> This is not perfectly accurate since there's
 	// no obligation by the compiler to postfix -c with the objectName, but it's
 	// what usually happens
-	sourceFileName, _, err := argsparser.GetSourceFileName(args)
-	if err != nil {
-		return fmt.Errorf("while getting source file name: %w", err)
+	sourceFileName, _ := sourcefile.GetSourceFileName(args)
+	if sourceFileName == "" {
+		return errors.Wrapf(err, "while getting source file name")
 	}
 
 	bitcodeFilepath, err := emitBitcode(
 		sourceFileName,
-		cfg.ClangPath,
+		clangPath,
 		args,
 		tempDir,
 		dryRun,
 	)
 	if err != nil {
-		return fmt.Errorf("while emitting bitcode: %w", err)
+		return errors.Wrapf(err, "while emitting bitcode")
 	}
 	afterOptBitcodeFilepath, err := schedulePasses(
 		sourceFileName,
@@ -272,42 +267,37 @@ func RunConjunct(
 		dryRun,
 	)
 	if err != nil {
-		return fmt.Errorf("while scheduling passes: %w", err)
+		return errors.Wrapf(err, "while scheduling passes")
 	}
 	_, err = buildBitcode(
-		cfg.ClangPath,
+		clangPath,
 		afterOptBitcodeFilepath,
 		args,
 		dryRun,
 	)
 	if err != nil {
-		return fmt.Errorf("while building bitcode: %w", err)
+		return errors.Wrapf(err, "while building bitcode")
 	}
 	if dryRun {
 		// run original clang
 		logrus.Debugln("Running original clang during dry-run...")
-		err, _ := RunOriginalClang(cfg.ClangPath, args)
+		err, _ := RunClang(clangPath, args)
 		if err != nil {
-			return fmt.Errorf(
-				"while running original clang during dry-run: %w",
+			return errors.Wrapf(
 				err,
+				"while running original clang during dry-run",
 			)
 		}
 	}
-	logrus.Infof("Conjunct ran successfully on %s\n", sourceFileName)
+	logrus.Infof("Conjunct ran successfully on %s", sourceFileName)
 	return nil
 }
 
-// RunOriginalClang runs the original clang using 'args'
-func RunOriginalClang(
+// RunClang runs the clang from 'clangPath' with 'args'
+func RunClang(
 	clangPath string,
 	args []string,
 ) (err error, exitCode int) {
-	logrus.Debugln("Running original clang...")
-	if len(clangPath) == 0 {
-		panic("clangPath is nil. Add it in the YAML configuration file")
-	}
-
 	cmd := exec.Command(clangPath, args...)
 	ret, err := cmd.CombinedOutput()
 	if err != nil {

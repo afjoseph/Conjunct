@@ -2,7 +2,6 @@ package config
 
 import (
 	stderr "errors"
-	"fmt"
 	"os"
 
 	"github.com/afjoseph/conjunct/argsparser"
@@ -16,12 +15,12 @@ var (
 	ErrParsingConfig = stderr.New("Failed to parse config")
 )
 
-type ConjunctConfig struct {
+type Config struct {
 	// Seed is the seed used for random number generation. Useful for some
 	// passes
 	Seed int64 `yaml:"seed"`
-	// ClangPath is the path to the Clang binary
-	ClangPath string `yaml:"clang-path"`
+	// ClangDirPath is the path to the Clang binary
+	ClangDirPath string `yaml:"clang-dir-path"`
 	// OptPath is the path to the Opt binary
 	OptPath string `yaml:"opt-path"`
 	// OptEnvArgs is a list of environment variables to setup while running Opt
@@ -37,7 +36,7 @@ type ConjunctConfig struct {
 // it as a ConjunctConfig struct
 func ExtractConfigFromArgs(
 	args []string,
-) (retArgs []string, cfg *ConjunctConfig, err error) {
+) (retArgs []string, cfg *Config, err error) {
 	logrus.Debugln("Parsing conjunct params...")
 
 	if len(args) == 0 {
@@ -60,12 +59,12 @@ func ExtractConfigFromArgs(
 	// Read and parse
 	configFileContent, err := os.ReadFile(configFilePath)
 	if err != nil {
-		return args, nil, fmt.Errorf("failed to read YAML file: %w", err)
+		return args, nil, errors.Wrapf(err, "failed to read YAML file")
 	}
 	if len(configFileContent) == 0 {
-		return args, nil, fmt.Errorf("Empty YAML file")
+		return args, nil, errors.New("empty config file")
 	}
-	config := ConjunctConfig{}
+	config := Config{}
 	err = yaml.Unmarshal(configFileContent, &config)
 	if err != nil {
 		return args, nil, errors.Wrapf(
@@ -76,9 +75,7 @@ func ExtractConfigFromArgs(
 		)
 	}
 	if config.Seed == 0 {
-		return args, nil, fmt.Errorf(
-			"missing seed in Conjunct config YAML file",
-		)
+		return args, nil, errors.New("missing seed in config")
 	}
 
 	// XXX <05-10-2023, afjoseph> Don't expand symlinks here. There **is** a
@@ -88,19 +85,12 @@ func ExtractConfigFromArgs(
 	// In summary, using `clang++` links libstdc++ by default, while `clang`
 	// doesn't, so expanding symlinks would force `clang++` to resolve to
 	// `clang`, which will cause libstd++ linking errors.
-	config.ClangPath, err = util.ExpandPath(config.ClangPath, false)
+	config.ClangDirPath, err = util.ExpandPath(config.ClangDirPath, false)
 	if err != nil {
-		return args, nil, fmt.Errorf(
-			"Failed to expand clang path %s: %w",
-			config.ClangPath,
+		return args, nil, errors.Wrapf(
 			err,
-		)
-	}
-	if err := util.CheckIfClangBinary(config.ClangPath); err != nil {
-		return args, nil, fmt.Errorf(
-			"Failed to find Clang at %s: %w",
-			config.ClangPath,
-			err,
+			"failed to expand clang dir path: %s",
+			config.ClangDirPath,
 		)
 	}
 
@@ -108,17 +98,10 @@ func ExtractConfigFromArgs(
 	// unit tests where symlinks are not expanded
 	config.OptPath, err = util.ExpandPath(config.OptPath, false)
 	if err != nil {
-		return args, nil, fmt.Errorf(
-			"Failed to expand opt path %s: %w",
-			config.OptPath,
+		return args, nil, errors.Wrapf(
 			err,
-		)
-	}
-	if err := util.CheckIfOptBinary(config.OptPath); err != nil {
-		return args, nil, fmt.Errorf(
-			"Failed to find Opt at %s: %w",
+			"failed to expand opt path: %s",
 			config.OptPath,
-			err,
 		)
 	}
 	if argsparser.HasArg(args, "--conjunct-retain-temp-dir") {
@@ -130,6 +113,6 @@ func ExtractConfigFromArgs(
 		)
 	}
 
-	logrus.Debugf("Parsed Conjunct config file successfully: %+v\n", config)
+	logrus.Debugf("Parsed Conjunct config file successfully: %+v", config)
 	return args, &config, nil
 }

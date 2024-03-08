@@ -20,7 +20,7 @@ func TestExtractConfig(t *testing.T) {
 	// paths to find clang and opt on your development machine
 	clangPath, err := exec.LookPath("clang")
 	require.NoError(t, err)
-	os.Setenv("CLANG_PATH", clangPath)
+	os.Setenv("CLANG_DIR_PATH", filepath.Dir(clangPath))
 	optPath, err := exec.LookPath("opt")
 	require.NoError(t, err)
 	os.Setenv("OPT_PATH", optPath)
@@ -28,7 +28,7 @@ func TestExtractConfig(t *testing.T) {
 	var testcases = []struct {
 		name           string
 		inputArgs      []string
-		expectedConfig *ConjunctConfig
+		expectedConfig *Config
 		expectedError  error
 	}{
 		{
@@ -41,11 +41,11 @@ func TestExtractConfig(t *testing.T) {
 					"example_config_1.yaml"),
 				"-c",
 				"whatever.c"},
-			expectedConfig: &ConjunctConfig{
-				Seed:       123456789,
-				ClangPath:  clangPath,
-				OptPath:    optPath,
-				OptCLIArgs: []string{"--lowerswitch"},
+			expectedConfig: &Config{
+				Seed:         123456789,
+				ClangDirPath: clangPath,
+				OptPath:      optPath,
+				OptCLIArgs:   []string{"--lowerswitch"},
 			},
 		},
 		{
@@ -56,11 +56,11 @@ func TestExtractConfig(t *testing.T) {
 					projectpath.Root,
 					"testassets/unit",
 					"example_config_1.yaml")},
-			expectedConfig: &ConjunctConfig{
-				Seed:       123456789,
-				ClangPath:  clangPath,
-				OptPath:    optPath,
-				OptCLIArgs: []string{"--lowerswitch"},
+			expectedConfig: &Config{
+				Seed:         123456789,
+				ClangDirPath: clangPath,
+				OptPath:      optPath,
+				OptCLIArgs:   []string{"--lowerswitch"},
 			},
 		},
 		{

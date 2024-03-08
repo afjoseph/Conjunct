@@ -67,7 +67,7 @@ func TestRunOriginalClang(t *testing.T) {
 
 	// Specify output path for object file
 	compiledObjectOutPath := filepath.Join("/tmp/", "test_hello")
-	RunOriginalClang(
+	RunClang(
 		clangPath,
 		[]string{
 			"-o", compiledObjectOutPath,
@@ -94,16 +94,17 @@ func TestRunConjunct(t *testing.T) {
 
 	// Target a hello world C file
 	testFilepath := filepath.Join(projectpath.Root, "testassets/unit/hello.c")
-	config := &config.ConjunctConfig{
-		Seed:      123,
-		ClangPath: clangPath,
-		OptPath:   optPath,
+	config := &config.Config{
+		Seed:         123,
+		ClangDirPath: clangPath,
+		OptPath:      optPath,
 	}
 
 	// Specify output path for object file
 	compiledObjectOutPath := filepath.Join("/tmp/", "test_hello")
 	err = RunConjunct(
 		config,
+		clangPath,
 		[]string{
 			"-o", compiledObjectOutPath,
 			"-c", testFilepath,

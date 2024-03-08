@@ -33,8 +33,9 @@ func Build() error {
 	return err
 }
 
-func BuildWithDefaultClang(clangPath string) error {
-	_, err := buildConjunct(clangPath)
+// Build the Conjunct binary and set a default clang path
+func BuildAndSetDefaultClangDirectory(defaultClangDir string) error {
+	_, err := buildConjunct(defaultClangDir)
 	return err
 }
 
@@ -45,7 +46,7 @@ func BuildIosDemoWithoutConjunct(verbose bool) error {
 
 // Build the ios Demo app with conjunct
 func BuildIosDemoWithConjunct(
-	optBinPath, clangBinPath string,
+	optBinPath, clangDirPath string,
 	verbose bool,
 ) error {
 	// Set conjunct path
@@ -80,7 +81,7 @@ func BuildIosDemoWithConjunct(
 		"XCODE_XCCONFIG_FILE": xcconfigPath,
 		"CC":                  conjunctBinPath,
 		"OPT_PATH":            optBinPath,
-		"CLANG_PATH":          clangBinPath,
+		"CLANG_DIR_PATH":      clangDirPath,
 	}, verbose)
 }
 
@@ -91,7 +92,7 @@ func BuildAndroidDemoWithoutConjunct(verbose bool) error {
 
 // Build the ios Demo app with conjunct
 func BuildAndroidDemoWithConjunct(
-	optBinPath, clangBinPath string,
+	optBinPath, clangDirPath string,
 	verbose bool,
 ) error {
 	// Set conjunct path
@@ -112,8 +113,8 @@ func BuildAndroidDemoWithConjunct(
 
 	// Build with xcconfig file and conjunct
 	return buildAndroidDemoWithEnv(conjunctBinPath, map[string]string{
-		"OPT_PATH":   optBinPath,
-		"CLANG_PATH": clangBinPath,
+		"OPT_PATH":       optBinPath,
+		"CLANG_DIR_PATH": clangDirPath,
 	}, verbose)
 }
 
@@ -122,7 +123,7 @@ func buildAndroidDemoWithEnv(
 	env map[string]string,
 	verbose bool,
 ) error {
-	return util.ChdirAndExec("testassets/android/ConjunctDemo", func() error {
+	return chdirAndExec("testassets/android/ConjunctDemo", func() error {
 		// If conjunctBinPath is empty, just run a regular build without conjunct
 		if conjunctBinPath == "" {
 			// Just run a regular build without conjunct
@@ -138,7 +139,7 @@ func buildAndroidDemoWithEnv(
 		// - specify the conjunct binary path
 		// - specify the conjunct config path
 		// - specify the verbosity level
-		// - pass CLANG_PATH and OPT_PATH as environment variables
+		// - pass CLANG_DIR_PATH and OPT_PATH as environment variables
 		conjunctFlags := ""
 		if verbose {
 			conjunctFlags = fmt.Sprintf(
@@ -181,7 +182,7 @@ func MakeXCConfigFile(params map[string]string) (string, error) {
 }
 
 func buildIosDemoWithEnv(env map[string]string, verbose bool) error {
-	return util.ChdirAndExec("testassets/ios/ConjunctDemo", func() error {
+	return chdirAndExec("testassets/ios/ConjunctDemo", func() error {
 		args := []string{
 			"build",
 			"--no-skip-current",
@@ -195,12 +196,15 @@ func buildIosDemoWithEnv(env map[string]string, verbose bool) error {
 }
 
 // buildConjunct builds conjunct and returns the path of the binary
-func buildConjunct(defaultClangPath string) (binPath string, err error) {
+func buildConjunct(defaultClangDir string) (binPath string, err error) {
 	args := []string{"build"}
-	// If defaultClangPath is provided, add it to the build flags
+	// If defaultClangDir is provided, add it to the build flags
 	ldFlags := ""
-	if defaultClangPath != "" {
-		ldFlags = fmt.Sprintf("--ldflags=-X main.DefaultClangPath=%s", defaultClangPath)
+	if defaultClangDir != "" {
+		ldFlags = fmt.Sprintf(
+			"--ldflags=-X main.DefaultClangDir=%s",
+			defaultClangDir,
+		)
 	}
 
 	// Add version information
@@ -208,7 +212,10 @@ func buildConjunct(defaultClangPath string) (binPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read VERSION file: %w", err)
 	}
-	ldFlags += fmt.Sprintf(" -X main.Version=%s", strings.TrimSpace(string(commit)))
+	ldFlags += fmt.Sprintf(
+		" -X main.Version=%s",
+		strings.TrimSpace(string(commit)),
+	)
 	args = append(args, ldFlags)
 	args = append(args, "-o", "conjunct", ".")
 	err = sh.Run("go", args...)
@@ -226,4 +233,17 @@ func orDie(err error, msg string) {
 	if err != nil {
 		panic(fmt.Errorf("%s: %w", msg, err))
 	}
+}
+
+// chdirAndExec changes the working directory to `dir` and executes `fn`.
+func chdirAndExec(dir string, fn func() error) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("failed to change directory to %s: %w", dir, err)
+	}
+	defer os.Chdir(wd)
+	return fn()
 }

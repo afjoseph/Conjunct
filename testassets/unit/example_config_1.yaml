@@ -1,8 +1,6 @@
 seed: 123456789
-clang: ${CLANG_PATH}
-opt: ${OPT_PATH}
-passes:
-  - lowerswitch
-opt-extra-args:
-  key1: val1
-  key2: val2
+clang-dir-path: ${CLANG_DIR_PATH}
+opt-path: ${OPT_PATH}
+# Just run a lowerswitch pass as a basic pass here
+opt-cli-args:
+  - --lowerswitch

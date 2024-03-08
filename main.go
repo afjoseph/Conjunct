@@ -5,23 +5,26 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/afjoseph/conjunct/argsparser"
 	"github.com/afjoseph/conjunct/config"
 	"github.com/afjoseph/conjunct/core"
-	"github.com/afjoseph/conjunct/util"
+	"github.com/afjoseph/conjunct/sourcefile"
+	"github.com/go-playground/errors/v5"
 	"github.com/sirupsen/logrus"
 )
 
 var (
 	// This is the version of conjunct. It's set through the build process.
 	Version string = "UNKNOWN"
-	// DefaultClangPath is the default path to the clang binary.
+	// DefaultClangDir is the default path to the clang binary.
 	// It's used if no config is available (i.e., through
 	// "--conjunct-config-path") that would point to a specific clang.
 	//
 	// This variable is usually set through the build process.
-	DefaultClangPath string = ""
+	DefaultClangDir string = ""
 )
 
 func init() {
@@ -35,7 +38,7 @@ func init() {
 		)
 		if err != nil {
 			panic(
-				fmt.Errorf("failed to open log file %s: %w", logFilePath, err),
+				errors.Wrapf(err, "failed to open log file %s", logFilePath),
 			)
 		}
 		logrus.SetOutput(io.MultiWriter(os.Stdout, logFile))
@@ -43,22 +46,13 @@ func init() {
 }
 
 func main() {
-	if err := checkForPathBinaries(); err != nil {
-		panic(
-			fmt.Errorf(
-				"important binary doesn't exist in PATH. Make sure to have this binary visible in $PATH: %w",
-				err,
-			),
-		)
-	}
-
 	args := os.Args[1:]
 	// Check for version flag
 	if argsparser.HasArg(args, "--version") {
 		fmt.Printf(
 			"Conjunct version %s | Default clang path: %s\n",
 			Version,
-			DefaultClangPath,
+			DefaultClangDir,
 		)
 		os.Exit(0)
 	}
@@ -68,55 +62,42 @@ func main() {
 		logrus.Debugf("Running conjunct in verbose mode")
 	}
 	args = argsparser.RemoveArg(args, "--conjunct-verbose", false)
-
-	// Paths:
-	// - Config is provided
-	//   - Do things however the config wants it
-	// - Config not provided
-	//   - Find clang in $PATH
-	//   - Run clang
+	// Extract config
 	args, cfg, err := config.ExtractConfigFromArgs(args)
 	if err != nil {
-		panic(fmt.Errorf("failed to extract conjunct config: %w", err))
+		panic(errors.Wrapf(err, "failed to extract config from args"))
 	}
-	// If there's no config provided, just run whatever Clang we can find in
-	// $PATH
+
+	// Find which clang binary to run: clang or clang++
+	_, sourceFileType := sourcefile.GetSourceFileName(args)
+	clangBinaryName := getClangBinaryName(
+		filepath.Base(os.Args[0]),
+		sourceFileType,
+	)
+
+	// If there's no config provided, find a clang binary to run, run it and
+	// exit
 	if cfg == nil {
-		// Extract source file extension: we need to know if this is a C or C++
-		// file mainly to know which clang binary to run since there is a
-		// difference between clang++ and clang:
-		// https://github.com/llvm/llvm-project/issues/54701#issuecomment-1086055306
-		clangBinaryName := ""
-		_, sourceFileType, err := argsparser.GetSourceFileName(
-			args,
-		)
-		if err != nil {
-			// If we failed to get the source filename, just use clang++
-			clangBinaryName = "clang++"
-		} else {
-			if sourceFileType == util.SourceFileType_C {
-				clangBinaryName = "clang"
-			} else if sourceFileType == util.SourceFileType_CPP ||
-				sourceFileType == util.SourceFileType_OBJC {
-				clangBinaryName = "clang++"
-			} else {
-				// This shouldn't happen, but it's okay to use clang++ here too
-				clangBinaryName = "clang++"
-			}
-		}
-		// Get Clang's path from DefaultClangPath or $PATH, preferring the
-		// former
 		clangPath := ""
-		if DefaultClangPath != "" {
-			clangPath = DefaultClangPath
+		// If we have a default clang dir, use it
+		if DefaultClangDir != "" {
+			clangPath = filepath.Join(DefaultClangDir, clangBinaryName)
+			// Check if there's a clang binary with a '.original' suffix in the same direcoty.
+			// If it exists, use it instead of the clang binary because this
+			// means there's a symlink with Conjunct
+			// TODO <08-03-2024, afjoseph> Expand on this meaning
+			clangOriginalPath := clangPath + ".original"
+			if _, err := os.Stat(clangOriginalPath); err == nil {
+				clangPath = clangOriginalPath
+			}
 		} else {
+			// Else, find a clang binary in $PATH
 			clangPath, err = exec.LookPath(clangBinaryName)
 			if err != nil {
-				panic(fmt.Errorf("failed to find clang in $PATH: %w", err))
+				panic(errors.Wrapf(err, "while finding %s in $PATH", clangBinaryName))
 			}
 		}
-		// Run it and exit
-		err, exitCode := core.RunOriginalClang(clangPath, args)
+		err, exitCode := core.RunClang(clangPath, args)
 		if err != nil {
 			logrus.Errorf("failed to run original clang: %v", err)
 			os.Exit(exitCode)
@@ -124,19 +105,44 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := core.RunConjunct(cfg, args); err != nil {
-		panic(fmt.Errorf("failed to run conjunct: %w", err))
+	// If we have a config, run conjunct with the supplied ClangDirPath in
+	// the config
+	clangPath := filepath.Join(cfg.ClangDirPath, clangBinaryName)
+	// Check if there's a clang binary with a '.original' suffix in the same direcoty.
+	// If it exists, use it instead of the clang binary because this
+	// means there's a symlink with Conjunct
+	// TODO <08-03-2024, afjoseph> Expand on this meaning
+	clangOriginalPath := clangPath + ".original"
+	if _, err := os.Stat(clangOriginalPath); err == nil {
+		clangPath = clangOriginalPath
+	}
+	if err := core.RunConjunct(cfg, clangPath, args); err != nil {
+		panic(errors.Wrapf(err, "failed to run conjunct"))
 	}
 }
 
-func checkForPathBinaries() error {
-	for _, bin := range []string{
-		"realpath",
-	} {
-		_, err := exec.LookPath(bin)
-		if err != nil {
-			return fmt.Errorf("missing binary %s", bin)
-		}
+func getClangBinaryName(
+	baseProgramName string,
+	sourceFileType sourcefile.Type,
+) string {
+	// If the binary name is not conjunct and it's a clang binary, use it
+	// directly
+	if baseProgramName != "conjunct" &&
+		strings.HasPrefix(baseProgramName, "clang") {
+		return baseProgramName
 	}
-	return nil
+
+	// Else, use clang or clang++ from $PATH based on the source file type
+	// XXX <08-03-2024, afjoseph> We need to know if this is a C or C++ file
+	// mainly to know which clang binary to run since there is a difference
+	// between clang++ and clang:
+	// https://github.com/llvm/llvm-project/issues/54701#issuecomment-1086055306
+	if sourceFileType == sourcefile.Type_C {
+		return "clang"
+	} else if sourceFileType == sourcefile.Type_CPP ||
+		sourceFileType == sourcefile.Type_OBJC {
+		return "clang++"
+	}
+	// If we have no idea what the source file type is, just default to clang++
+	return "clang++"
 }
